@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -302,7 +303,37 @@ namespace Nop.Plugin.Api.Controllers
 			// Inserting the new customer
 			var newCustomer = await _factory.InitializeAsync();
 			customerDelta.Merge(newCustomer);
+			//first insert root object
+            await CustomerService.InsertCustomerAsync(newCustomer);
 
+            await InsertFirstAndLastNameGenericAttributesAsync(customerDelta.Dto.FirstName, customerDelta.Dto.LastName, newCustomer);
+
+            if (customerDelta.Dto.LanguageId is int languageId && await _languageService.GetLanguageByIdAsync(languageId) != null)
+            {
+                await _genericAttributeService.SaveAttributeAsync(newCustomer, nameof(Customer.LanguageId), languageId);
+            }
+
+            if (customerDelta.Dto.CurrencyId is int currencyId && await _currencyService.GetCurrencyByIdAsync(currencyId) != null)
+            {
+                await _genericAttributeService.SaveAttributeAsync(newCustomer, nameof(Customer.CurrencyId), currencyId);
+            }
+
+            //password
+            if (!string.IsNullOrWhiteSpace(customerDelta.Dto.Password))
+            {
+                await AddPasswordAsync(customerDelta.Dto.Password, newCustomer);
+            }
+
+            // We need to insert the entity first so we can have its id in order to map it to anything.
+            // TODO: Localization
+            // TODO: move this before inserting the customer.
+            if (customerDelta.Dto.RoleIds.Count > 0)
+            {
+                await AddValidRolesAsync(customerDelta, newCustomer);
+                await CustomerService.UpdateCustomerAsync(newCustomer);
+            }
+
+            List<Address> addresses = new List<Address>();
 			foreach (var address in customerDelta.Dto.Addresses)
 			{
 				// we need to explicitly set the date as if it is not specified
@@ -311,38 +342,16 @@ namespace Nop.Plugin.Api.Controllers
 				{
 					address.CreatedOnUtc = DateTime.UtcNow;
 				}
-
-				await CustomerService.InsertCustomerAddressAsync(newCustomer, address.ToEntity());
+				//first insert addrress
+                var newAddress = address.ToEntity();
+                await _addressService.InsertAddressAsync(newAddress);
+				await CustomerService.InsertCustomerAddressAsync(newCustomer,newAddress);
+                addresses.Add(newAddress);
 			}
 
-			await CustomerService.InsertCustomerAsync(newCustomer);
+			
 
-			await InsertFirstAndLastNameGenericAttributesAsync(customerDelta.Dto.FirstName, customerDelta.Dto.LastName, newCustomer);
-
-			if (customerDelta.Dto.LanguageId is int languageId && await _languageService.GetLanguageByIdAsync(languageId) != null)
-			{
-				await _genericAttributeService.SaveAttributeAsync(newCustomer, nameof(Customer.LanguageId), languageId);
-			}
-
-			if (customerDelta.Dto.CurrencyId is int currencyId && await _currencyService.GetCurrencyByIdAsync(currencyId) != null)
-			{
-				await _genericAttributeService.SaveAttributeAsync(newCustomer, nameof(Customer.CurrencyId), currencyId);
-			}
-
-			//password
-			if (!string.IsNullOrWhiteSpace(customerDelta.Dto.Password))
-			{
-				await AddPasswordAsync(customerDelta.Dto.Password, newCustomer);
-			}
-
-			// We need to insert the entity first so we can have its id in order to map it to anything.
-			// TODO: Localization
-			// TODO: move this before inserting the customer.
-			if (customerDelta.Dto.RoleIds.Count > 0)
-			{
-				await AddValidRolesAsync(customerDelta, newCustomer);
-				await CustomerService.UpdateCustomerAsync(newCustomer);
-			}
+		
 
 			// Preparing the result dto of the new customer
 			// We do not prepare the shopping cart items because we have a separate endpoint for them.
@@ -359,11 +368,16 @@ namespace Nop.Plugin.Api.Controllers
 			newCustomerDto.LanguageId = customerDelta.Dto.LanguageId;
 			newCustomerDto.CurrencyId = customerDelta.Dto.CurrencyId;
 
+			//addresses
+            foreach (var address in addresses)
+            {
+                newCustomerDto.Addresses.Add(address.ToDto());
+            }
+
 			//activity log
 			await CustomerActivityService.InsertActivityAsync("AddNewCustomer", await LocalizationService.GetResourceAsync("ActivityLog.AddNewCustomer"), newCustomer);
 
 			var customersRootObject = new CustomersRootObject();
-
 			customersRootObject.Customers.Add(newCustomerDto);
 
 			var json = JsonFieldsSerializer.Serialize(customersRootObject, string.Empty);
