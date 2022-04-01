@@ -10,5 +10,10 @@ namespace Nop.Plugin.Api.MappingExtensions
         {
             return customer.MapTo<Customer, CustomerDto>();
         }
+
+        public static CustomerCreateDto CreateCustomerToDto(this Customer customer)
+        {
+            return customer.MapTo<Customer, CustomerCreateDto>();
+        }
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
@@ -271,33 +272,25 @@ namespace Nop.Plugin.Api.Controllers
 
 		[HttpPost]
 		[Route("/api/orders", Name = "CreateOrder")]
-		[ProducesResponseType(typeof(OrdersRootObject), (int)HttpStatusCode.OK)]
+		[ProducesResponseType(typeof(OrdersSimpleRootObject), (int)HttpStatusCode.OK)]
 		[ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
 		[ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
 		[ProducesResponseType(typeof(string), (int)HttpStatusCode.NotFound)]
 		[ProducesResponseType(typeof(ErrorsRootObject), 422)]
 		public async Task<IActionResult> CreateOrder(
 			[FromBody]
-			[ModelBinder(typeof(JsonModelBinder<OrderDto>))]
-			Delta<OrderDto> orderDelta)
+			[ModelBinder(typeof(JsonModelBinder<OrderSimpleDto>))]
+			Delta<OrderSimpleDto> orderDelta)
 		{
 			if (orderDelta.Dto.CustomerId == null)
 			{
 				return Error(HttpStatusCode.BadRequest, "customerId", "invalid customer id");
 			}
 
-			if (orderDelta.Dto.BillingAddress == null)
-			{
-				return Error(HttpStatusCode.BadRequest, "billingAddress", "missing billing address");
-			}
-			if (orderDelta.Dto.BillingAddress.Id == 0)
-			{
-				return Error(HttpStatusCode.BadRequest, "billingAddress", "non-existing billing address");
-			}
-			if (orderDelta.Dto.ShippingAddress != null && orderDelta.Dto.ShippingAddress.Id == 0) // shipping address CAN be null, but if it is not, it must exist in db
+			/*if (orderDelta.Dto.ShippingAddress != null && orderDelta.Dto.ShippingAddress.Id == 0) // shipping address CAN be null, but if it is not, it must exist in db
 			{
 				return Error(HttpStatusCode.BadRequest, "shippingAddress", "non-existing shipping address");
-			}
+			}*/
 
 			if (!await CheckPermissions(orderDelta.Dto.CustomerId))
 			{
@@ -326,28 +319,9 @@ namespace Nop.Plugin.Api.Controllers
 				shippingRequired = await IsShippingAddressRequiredAsync(orderDelta.Dto.OrderItems);
 			}
 
-			if (shippingRequired)
-			{
-				var isValid = true;
-
-				isValid &= await SetShippingOptionAsync(orderDelta.Dto.ShippingRateComputationMethodSystemName,
-											 orderDelta.Dto.ShippingMethod,
-											 orderDelta.Dto.StoreId ?? _storeContext.GetCurrentStore().Id,
-											 customer,
-											 BuildShoppingCartItemsFromOrderItemDtos(orderDelta.Dto.OrderItems.ToList(),
-																					 customer.Id,
-																					 orderDelta.Dto.StoreId ?? _storeContext.GetCurrentStore().Id));
-
-				if (!isValid)
-				{
-					return Error(HttpStatusCode.BadRequest);
-				}
-			}
-
 			var newOrder = await _factory.InitializeAsync();
 			orderDelta.Merge(newOrder);
 
-			customer.BillingAddressId = newOrder.BillingAddressId = orderDelta.Dto.BillingAddress.Id;
 			customer.ShippingAddressId = newOrder.ShippingAddressId = orderDelta.Dto.ShippingAddress?.Id;
 
 			await CustomerService.UpdateCustomerAsync(customer); // update billing and shipping addresses
@@ -375,9 +349,9 @@ namespace Nop.Plugin.Api.Controllers
 
 			await CustomerActivityService.InsertActivityAsync("AddNewOrder", await LocalizationService.GetResourceAsync("ActivityLog.AddNewOrder"), newOrder);
 
-			var ordersRootObject = new OrdersRootObject();
+			var ordersRootObject = new OrdersSimpleRootObject();
 
-			var placedOrderDto = await _dtoHelper.PrepareOrderDTOAsync(placeOrderResult.PlacedOrder);
+			var placedOrderDto = await _dtoHelper.PrepareOrderSimpleDTOAsync(placeOrderResult.PlacedOrder);
 
 			ordersRootObject.Orders.Add(placedOrderDto);
 

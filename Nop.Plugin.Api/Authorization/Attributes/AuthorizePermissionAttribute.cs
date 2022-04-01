@@ -79,8 +79,8 @@ namespace Nop.Plugin.Api.Authorization.Attributes
 				if (context == null)
 					throw new ArgumentNullException(nameof(context));
 
-				if (!DataSettingsManager.IsDatabaseInstalled())
-					return;
+                if (!DataSettingsManager.IsDatabaseInstalled())
+                    return;
 
 				//check whether this filter has been overridden for the action
 				var actionFilter = context.ActionDescriptor.FilterDescriptors

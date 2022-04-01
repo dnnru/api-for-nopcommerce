@@ -10,5 +10,10 @@ namespace Nop.Plugin.Api.MappingExtensions
         {
             return order.MapTo<Order, OrderDto>();
         }
+
+        public static OrderSimpleDto ToDtoSimple(this Order order)
+        {
+            return order.MapTo<Order, OrderSimpleDto>();
+        }
     }
 }

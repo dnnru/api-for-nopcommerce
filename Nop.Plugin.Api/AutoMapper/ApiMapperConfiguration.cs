@@ -45,6 +45,9 @@ namespace Nop.Plugin.Api.AutoMapper
             CreateMap<Category, CategoryDto>();
             CreateMap<CategoryDto, Category>();
 
+            CreateMap<Category, CategoryAllDto>();
+            CreateMap<CategoryAllDto, Category>();
+
             CreateMap<Store, StoreDto>();
 
             CreateMap<ProductCategory, ProductCategoryMappingDto>();
@@ -64,9 +67,11 @@ namespace Nop.Plugin.Api.AutoMapper
             CreateShoppingCartItemMap();
 
             CreateCustomerToDTOMap();
+            CreateCustomerCreateToDTOMap();
 
             CreateMap<OrderItem, OrderItemDto>();
             CreateOrderEntityToOrderDtoMap();
+            CreateOrderEntityToOrderSimpleDtoMap();
 
             CreateProductMap();
 
@@ -87,6 +92,13 @@ namespace Nop.Plugin.Api.AutoMapper
             CreateMap<Country, CountryDto>();
 
             CreateMap<Currency, CurrencyDto>();
+
+            CreateMap<ProductDto, ProductsForHomePageSliderToReturnDto>();
+
+            CreateMap<Product, ProductsPriceToReturnDto>();
+            
+            CreateMap<ProductDto, ProductTopSellingToReturnDto>();
+            CreateMap<ProductDto, ProductsSearchTearmPriceCategoryToReturnDto>();
         }
 
         public int Order => 0;
@@ -112,6 +124,14 @@ namespace Nop.Plugin.Api.AutoMapper
                                       .IgnoreAllNonExisting()
                                       .ForMember(x => x.Id, y => y.MapFrom(src => src.Id));
                                       //.ForMember(x => x.OrderItems, y => y.MapFrom(src => src.OrderItems.Select(x => x.ToDto())));
+        }
+
+        private void CreateOrderEntityToOrderSimpleDtoMap()
+        {
+            AutoMapperApiConfiguration.MapperConfigurationExpression.CreateMap<Order, OrderSimpleDto>()
+                                      .IgnoreAllNonExisting()
+                                      .ForMember(x => x.Id, y => y.MapFrom(src => src.Id));
+            //.ForMember(x => x.OrderItems, y => y.MapFrom(src => src.OrderItems.Select(x => x.ToDto())));
         }
 
         private void CreateAddressMap()
@@ -154,6 +174,30 @@ namespace Nop.Plugin.Api.AutoMapper
                                       //                             src.ShoppingCartItems.GetWithDefault(x => x, new List<ShoppingCartItem>())
                                       //                                .Select(item => item.ToDto())))
                                       //.ForMember(x => x.RoleIds, y => y.MapFrom(src => src.CustomerRoles.Select(z => z.Id)));
+        }
+
+        private void CreateCustomerCreateToDTOMap()
+        {
+            AutoMapperApiConfiguration.MapperConfigurationExpression.CreateMap<Customer, CustomerCreateDto>()
+                                      .IgnoreAllNonExisting()
+                                      .ForMember(x => x.Id, y => y.MapFrom(src => src.Id));
+            //.ForMember(x => x.BillingAddress,
+            //           y => y.MapFrom(src => src.BillingAddress.GetWithDefault(x => x, new Address()).ToDto()))
+            //.ForMember(x => x.ShippingAddress,
+            //           y => y.MapFrom(src => src.ShippingAddress.GetWithDefault(x => x, new Address()).ToDto()))
+            //.ForMember(x => x.Addresses,
+            //           y =>
+            //               y.MapFrom(
+            //                         src =>
+            //                             src.Addresses.GetWithDefault(x => x, new List<Address>())
+            //                                .Select(address => address.ToDto())))
+            //.ForMember(x => x.ShoppingCartItems,
+            //           y =>
+            //               y.MapFrom(
+            //                         src =>
+            //                             src.ShoppingCartItems.GetWithDefault(x => x, new List<ShoppingCartItem>())
+            //                                .Select(item => item.ToDto())))
+            //.ForMember(x => x.RoleIds, y => y.MapFrom(src => src.CustomerRoles.Select(z => z.Id)));
         }
 
         private void CreateShoppingCartItemMap()

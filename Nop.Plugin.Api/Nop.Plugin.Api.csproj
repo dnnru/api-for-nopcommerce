@@ -23,7 +23,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <OutputPath>..\..\nopCommerce\src\Presentation\Nop.Web\Plugins\Nop.Plugin.Api</OutputPath>
+    <OutputPath>..\..\Nop.Plugin.Api</OutputPath>
     <OutDir>$(OutputPath)</OutDir>
   </PropertyGroup>
 

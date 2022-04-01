@@ -143,6 +143,85 @@ namespace Nop.Plugin.Api.Helpers
 			return productDto;
 		}
 
+		public async Task<ProductsForHomePageSliderToReturnDto> PrepareProductForHomePageSliderToReturnDTOAsync(Product product)
+		{
+			var productDto = product.ToDto();
+			var productPictures = await _productService.GetProductPicturesByProductIdAsync(product.Id);
+
+			await PrepareProductImagesAsync(productPictures, productDto);
+
+			// localization
+			if (await _customerLanguage.Value is { Id: var languageId })
+			{
+				productDto.Name = await _localizationService.GetLocalizedAsync(product, x => x.Name, languageId);
+				productDto.ShortDescription = await _localizationService.GetLocalizedAsync(product, x => x.ShortDescription, languageId);
+				productDto.FullDescription = await _localizationService.GetLocalizedAsync(product, x => x.FullDescription, languageId);
+			}
+
+			var productToReturnDto = productDto.ToDto();
+
+			return productToReturnDto;
+		}
+
+		public async Task<ProductsSearchTearmPriceCategoryToReturnDto> PrepareProductForSearchTearmPriceCategoryToReturnDTOAsync(Product product)
+		{
+			var productDto = product.ToDto();
+			var productPictures = await _productService.GetProductPicturesByProductIdAsync(product.Id);
+
+			await PrepareProductImagesAsync(productPictures, productDto);
+
+			// localization
+			if (await _customerLanguage.Value is { Id: var languageId })
+			{
+				productDto.Name = await _localizationService.GetLocalizedAsync(product, x => x.Name, languageId);
+				productDto.ShortDescription = await _localizationService.GetLocalizedAsync(product, x => x.ShortDescription, languageId);
+				productDto.FullDescription = await _localizationService.GetLocalizedAsync(product, x => x.FullDescription, languageId);
+			}
+
+			await PrepareProductAttributesAsync(productDto);
+
+			var productToReturnDto = productDto.ToDtoSearch();
+
+			return productToReturnDto;
+		}
+
+		public async Task<ProductTopSellingToReturnDto> PrepareProductsTopSellingToReturnDTOAsync(Product product, Dictionary<int,int> productCount)
+		{
+			var productDto = product.ToDto();
+			var productPictures = await _productService.GetProductPicturesByProductIdAsync(product.Id);
+
+			await PrepareProductImagesAsync(productPictures, productDto);
+
+			// localization
+			if (await _customerLanguage.Value is { Id: var languageId })
+			{
+				productDto.Name = await _localizationService.GetLocalizedAsync(product, x => x.Name, languageId);
+				productDto.ShortDescription = await _localizationService.GetLocalizedAsync(product, x => x.ShortDescription, languageId);
+				productDto.FullDescription = await _localizationService.GetLocalizedAsync(product, x => x.FullDescription, languageId);
+			}
+
+			await PrepareProductAttributesAsync(productDto);
+
+			var productTopSellingToReturnDto = productDto.ToDtoTopSelling();
+
+			foreach(var orderQuantity in productCount)
+			{
+				if(productTopSellingToReturnDto.Id == orderQuantity.Key)
+				{
+					productTopSellingToReturnDto.ProductTotalOrderItemsCount = orderQuantity.Value;
+				}
+			}
+
+			return productTopSellingToReturnDto;
+		}
+
+		public ProductsPriceToReturnDto PrepareProductPriceToReturnDTOAsync(Product product)
+		{
+			var productToReturnDto = product.ToDtoPrice();
+
+			return productToReturnDto;
+		}
+
 		public async Task<CategoryDto> PrepareCategoryDTOAsync(Category category)
 		{
 			var categoryDto = category.ToDto();
@@ -171,6 +250,28 @@ namespace Nop.Plugin.Api.Helpers
 			return categoryDto;
 		}
 
+		public async Task<CategoryAllDto> PrepareAllCategoryDTOAsync(Category category)
+		{
+			var categoryDto = category.ToDtoAll();
+
+			var picture = await _pictureService.GetPictureByIdAsync(category.PictureId);
+			var imageDto = await PrepareImageDtoAsync(picture);
+
+			if (imageDto != null)
+			{
+				categoryDto.Image = imageDto;
+			}
+
+			// localization
+			if (await _customerLanguage.Value is { Id: var languageId })
+			{
+				categoryDto.Name = await _localizationService.GetLocalizedAsync(category, x => x.Name, languageId);
+				categoryDto.Description = await _localizationService.GetLocalizedAsync(category, x => x.Description, languageId);
+			}
+
+			return categoryDto;
+		}
+
 		public async Task<OrderDto> PrepareOrderDTOAsync(Order order)
 		{
 			var orderDto = order.ToDto();
@@ -183,7 +284,18 @@ namespace Nop.Plugin.Api.Helpers
 			return orderDto;
 		}
 
-		public TopicDto PrepareTopicDTO(Topic topic)
+        public async Task<OrderSimpleDto> PrepareOrderSimpleDTOAsync(Order order)
+        {
+            var orderDto = order.ToDtoSimple();
+
+            orderDto.OrderItems = await (await _orderService.GetOrderItemsAsync(order.Id)).SelectAwait(async item => await PrepareOrderItemDTOAsync(item)).ToListAsync();
+
+            orderDto.ShippingAddress = (await _addressService.GetAddressByIdAsync(order.ShippingAddressId ?? 0))?.ToDto();
+
+            return orderDto;
+        }
+
+        public TopicDto PrepareTopicDTO(Topic topic)
 		{
 			var topicDto = topic.ToDto();
 			return topicDto;

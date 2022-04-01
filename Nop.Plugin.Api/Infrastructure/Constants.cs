@@ -29,7 +29,7 @@ namespace Nop.Plugin.Api.Infrastructure
             public const int DefaultSinceId = 0;
             public const int DefaultCustomerId = 0;
             public const string DefaultOrder = "Id";
-            public const int MaxLimit = 250;
+            public const int MaxLimit = 1000000;
 
             public const int MinLimit = 1;
 

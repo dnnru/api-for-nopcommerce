@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Nop.Core;
 using Nop.Core.Domain.Common;
 using Nop.Core.Domain.Customers;
@@ -254,7 +255,8 @@ namespace Nop.Plugin.Api.Controllers
 		/// <response code="401">Unauthorized</response>
 		[HttpGet]
 		[Route("/api/customers/search", Name = "SearchCustomers")]
-		[ProducesResponseType(typeof(CustomersRootObject), (int)HttpStatusCode.OK)]
+        [AuthorizePermission("ManageCustomers", ignore: true)] // turn off all permission authorizations, access to this action is allowed to all authenticated customers
+        [ProducesResponseType(typeof(CustomersRootObject), (int)HttpStatusCode.OK)]
 		[ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
 		[ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
 		public async Task<IActionResult> Search([FromQuery] CustomersSearchParametersModel parameters)
@@ -283,13 +285,14 @@ namespace Nop.Plugin.Api.Controllers
 
 		[HttpPost]
 		[Route("/api/customers", Name = "CreateCustomer")]
-		[ProducesResponseType(typeof(CustomersRootObject), (int)HttpStatusCode.OK)]
+        [AuthorizePermission("ManageCustomers", ignore: true)] // turn off all permission authorizations, access to this action is allowed to all authenticated customers
+        [ProducesResponseType(typeof(CustomersCreateRootObject), (int)HttpStatusCode.OK)]
 		[ProducesResponseType(typeof(ErrorsRootObject), 422)]
 		[ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
 		public async Task<IActionResult> CreateCustomer(
 			[FromBody]
-			[ModelBinder(typeof(JsonModelBinder<CustomerDto>))]
-			Delta<CustomerDto> customerDelta)
+			[ModelBinder(typeof(JsonModelBinder<CustomerCreateDto>))]
+			Delta<CustomerCreateDto> customerDelta)
 		{
 			// Here we display the errors if the validation has failed at some point.
 			if (!ModelState.IsValid)
@@ -303,31 +306,7 @@ namespace Nop.Plugin.Api.Controllers
 			var newCustomer = await _factory.InitializeAsync();
 			customerDelta.Merge(newCustomer);
 
-			foreach (var address in customerDelta.Dto.Addresses)
-			{
-				// we need to explicitly set the date as if it is not specified
-				// it will default to 01/01/0001 which is not supported by SQL Server and throws and exception
-				if (address.CreatedOnUtc == null)
-				{
-					address.CreatedOnUtc = DateTime.UtcNow;
-				}
-
-				await CustomerService.InsertCustomerAddressAsync(newCustomer, address.ToEntity());
-			}
-
 			await CustomerService.InsertCustomerAsync(newCustomer);
-
-			await InsertFirstAndLastNameGenericAttributesAsync(customerDelta.Dto.FirstName, customerDelta.Dto.LastName, newCustomer);
-
-			if (customerDelta.Dto.LanguageId is int languageId && await _languageService.GetLanguageByIdAsync(languageId) != null)
-			{
-				await _genericAttributeService.SaveAttributeAsync(newCustomer, NopCustomerDefaults.LanguageIdAttribute, languageId);
-			}
-
-			if (customerDelta.Dto.CurrencyId is int currencyId && await _currencyService.GetCurrencyByIdAsync(currencyId) != null)
-			{
-				await _genericAttributeService.SaveAttributeAsync(newCustomer, NopCustomerDefaults.CurrencyIdAttribute, currencyId);
-			}
 
 			//password
 			if (!string.IsNullOrWhiteSpace(customerDelta.Dto.Password))
@@ -346,23 +325,12 @@ namespace Nop.Plugin.Api.Controllers
 
 			// Preparing the result dto of the new customer
 			// We do not prepare the shopping cart items because we have a separate endpoint for them.
-			var newCustomerDto = newCustomer.ToDto();
-
-			// This is needed because the entity framework won't populate the navigation properties automatically
-			// and the country will be left null. So we do it by hand here.
-			await PopulateAddressCountryNamesAsync(newCustomerDto);
-
-			// Set the fist and last name separately because they are not part of the customer entity, but are saved in the generic attributes.
-			newCustomerDto.FirstName = customerDelta.Dto.FirstName;
-			newCustomerDto.LastName = customerDelta.Dto.LastName;
-
-			newCustomerDto.LanguageId = customerDelta.Dto.LanguageId;
-			newCustomerDto.CurrencyId = customerDelta.Dto.CurrencyId;
+			var newCustomerDto = newCustomer.CreateCustomerToDto();
 
 			//activity log
 			await CustomerActivityService.InsertActivityAsync("AddNewCustomer", await LocalizationService.GetResourceAsync("ActivityLog.AddNewCustomer"), newCustomer);
 
-			var customersRootObject = new CustomersRootObject();
+			var customersRootObject = new CustomersCreateRootObject();
 
 			customersRootObject.Customers.Add(newCustomerDto);
 
@@ -373,6 +341,7 @@ namespace Nop.Plugin.Api.Controllers
 
 		[HttpPut]
 		[Route("/api/customers/{id}", Name = "UpdateCustomer")]
+		[AuthorizePermission("ManageCustomers", ignore: true)] // turn off all permission authorizations, access to this action is allowed to all authenticated customers
 		[ProducesResponseType(typeof(CustomersRootObject), (int)HttpStatusCode.OK)]
 		[ProducesResponseType(typeof(ErrorsRootObject), 422)]
 		[ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
@@ -388,6 +357,20 @@ namespace Nop.Plugin.Api.Controllers
 			{
 				return Error();
 			}
+			//get current customer and check if the customer update and current customer from jwt bearer are same if not bad request
+			var customerEntity = await _authenticationService.GetAuthenticatedCustomerAsync();
+
+			if (customerEntity is null)
+			{
+				return Error(HttpStatusCode.Unauthorized);
+			}
+
+			var customerDto = await _customerApiService.GetCustomerByIdAsync(customerEntity.Id);
+
+			if (customerDto == null)
+			{
+				return Error(HttpStatusCode.NotFound, "customer", "not found");
+			}
 
 			// Updateting the customer
 			var currentCustomer = await _customerApiService.GetCustomerEntityByIdAsync(customerDelta.Dto.Id);
@@ -395,6 +378,11 @@ namespace Nop.Plugin.Api.Controllers
 			if (currentCustomer == null)
 			{
 				return Error(HttpStatusCode.NotFound, "customer", "not found");
+			}
+
+			if(customerDto.Id != currentCustomer.Id)
+			{
+				return Error(HttpStatusCode.Unauthorized);
 			}
 
 			customerDelta.Merge(currentCustomer);
@@ -654,7 +642,34 @@ namespace Nop.Plugin.Api.Controllers
 			}
 		}
 
-		private async Task PopulateAddressCountryNamesAsync(CustomerDto newCustomerDto)
+        private async Task AddValidRolesAsync(Delta<CustomerCreateDto> customerDelta, Customer currentCustomer)
+        {
+            var allCustomerRoles = await CustomerService.GetAllCustomerRolesAsync(true);
+            foreach (var customerRole in allCustomerRoles)
+            {
+                if (customerDelta.Dto.RoleIds.Contains(customerRole.Id))
+                {
+                    //new role
+                    if (!await CustomerService.IsInCustomerRoleAsync(currentCustomer, customerRole.Name))
+                    {
+                        await CustomerService.AddCustomerRoleMappingAsync(new CustomerCustomerRoleMapping
+                        {
+                            CustomerId = currentCustomer.Id,
+                            CustomerRoleId = customerRole.Id
+                        });
+                    }
+                }
+                else
+                {
+                    if (await CustomerService.IsInCustomerRoleAsync(currentCustomer, customerRole.Name))
+                    {
+                        await CustomerService.RemoveCustomerRoleMappingAsync(currentCustomer, customerRole);
+                    }
+                }
+            }
+        }
+
+        private async Task PopulateAddressCountryNamesAsync(CustomerDto newCustomerDto)
 		{
 			foreach (var address in newCustomerDto.Addresses)
 			{

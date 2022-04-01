@@ -10,9 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using Nop.Core;
-using Nop.Core.Configuration;
 using Nop.Core.Domain.Customers;
-using Nop.Core.Infrastructure;
 using Nop.Plugin.Api.Configuration;
 using Nop.Plugin.Api.Domain;
 using Nop.Plugin.Api.Infrastructure;
@@ -22,12 +20,15 @@ using Nop.Services.Authentication;
 using Nop.Services.Customers;
 using Nop.Services.Logging;
 using Nop.Services.Orders;
+using Nop.Core.Infrastructure;
+using Nop.Core.Configuration;
 
 namespace Nop.Plugin.Api.Controllers
 {
 	[AllowAnonymous]
 	public class TokenController : Controller
 	{
+		//private readonly ApiConfiguration _apiConfiguration;
 		private readonly ApiSettings _apiSettings;
 		private readonly ICustomerActivityService _customerActivityService;
 		private readonly IShoppingCartService _shoppingCartService;
@@ -43,8 +44,10 @@ namespace Nop.Plugin.Api.Controllers
 			IShoppingCartService shoppingCartService,
 			IAuthenticationService authenticationService,
 			CustomerSettings customerSettings,
-			ApiSettings apiSettings)
-		{
+            //ApiSettings apiSettings,
+            //ApiConfiguration apiConfiguration)
+            ApiSettings apiSettings)
+        {
 			_customerService = customerService;
 			_customerRegistrationService = customerRegistrationService;
 			_customerActivityService = customerActivityService;
@@ -52,6 +55,7 @@ namespace Nop.Plugin.Api.Controllers
 			_authenticationService = authenticationService;
 			_customerSettings = customerSettings;
 			_apiSettings = apiSettings;
+			//_apiConfiguration = apiConfiguration;
 		}
 
 		[HttpPost]
@@ -183,9 +187,11 @@ namespace Nop.Plugin.Api.Controllers
 					claims.Add(new Claim(ClaimTypes.Name, customer.Email));
 				}
 			}
-			var apiConfiguration = Singleton<AppSettings>.Instance.Get<ApiConfiguration>();
-			var signingCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(apiConfiguration.SecurityKey)), SecurityAlgorithms.HmacSha256);
-			var token = new JwtSecurityToken(new JwtHeader(signingCredentials), new JwtPayload(claims));
+
+            //var signingCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_apiConfiguration.SecurityKey)), SecurityAlgorithms.HmacSha256);
+            var apiConfiguration = Singleton<AppSettings>.Instance.Get<ApiConfiguration>();
+            var signingCredentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(apiConfiguration.SecurityKey)), SecurityAlgorithms.HmacSha256);
+            var token = new JwtSecurityToken(new JwtHeader(signingCredentials), new JwtPayload(claims));
 			var accessToken = new JwtSecurityTokenHandler().WriteToken(token);
 
 			return new TokenResponse(accessToken, currentTime.UtcDateTime, expirationTime.UtcDateTime)

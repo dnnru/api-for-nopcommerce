@@ -15,5 +15,10 @@ namespace Nop.Plugin.Api.MappingExtensions
         {
             return categoryDto.MapTo<CategoryDto, Category>();
         }
+
+        public static CategoryAllDto ToDtoAll(this Category category)
+        {
+            return category.MapTo<Category, CategoryAllDto>();
+        }
     }
 }

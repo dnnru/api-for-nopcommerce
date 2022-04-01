@@ -17,6 +17,7 @@ using Nop.Plugin.Api.DTO.ShoppingCarts;
 using Nop.Plugin.Api.DTO.SpecificationAttributes;
 using Nop.Plugin.Api.DTO.Stores;
 using Nop.Plugin.Api.DTOs.Topics;
+using System.Collections.Generic;
 
 namespace Nop.Plugin.Api.Helpers
 {
@@ -24,7 +25,9 @@ namespace Nop.Plugin.Api.Helpers
     {
         Task<ProductDto> PrepareProductDTOAsync(Product product);
         Task<CategoryDto> PrepareCategoryDTOAsync(Category category);
+        Task<CategoryAllDto> PrepareAllCategoryDTOAsync(Category category);
         Task<OrderDto> PrepareOrderDTOAsync(Order order);
+        Task<OrderSimpleDto> PrepareOrderSimpleDTOAsync(Order order);
         Task<ShoppingCartItemDto> PrepareShoppingCartItemDTOAsync(ShoppingCartItem shoppingCartItem);
         Task<OrderItemDto> PrepareOrderItemDTOAsync(OrderItem orderItem);
         Task<StoreDto> PrepareStoreDTOAsync(Store store);
@@ -35,5 +38,9 @@ namespace Nop.Plugin.Api.Helpers
         SpecificationAttributeDto PrepareSpecificationAttributeDto(SpecificationAttribute specificationAttribute);
         Task<ManufacturerDto> PrepareManufacturerDtoAsync(Manufacturer manufacturer);
         TopicDto PrepareTopicDTO(Topic topic);
+        Task<ProductsForHomePageSliderToReturnDto> PrepareProductForHomePageSliderToReturnDTOAsync(Product product);
+        Task<ProductsSearchTearmPriceCategoryToReturnDto> PrepareProductForSearchTearmPriceCategoryToReturnDTOAsync(Product product);
+        ProductsPriceToReturnDto PrepareProductPriceToReturnDTOAsync(Product product);
+        Task<ProductTopSellingToReturnDto> PrepareProductsTopSellingToReturnDTOAsync(Product product, Dictionary<int,int> productCount);
     }
 }

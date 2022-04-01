@@ -43,6 +43,8 @@ namespace Nop.Plugin.Api.Controllers
         private readonly IProductService _productService;
         private readonly IProductTagService _productTagService;
         private readonly IUrlRecordService _urlRecordService;
+        private readonly IOrderApiService _orderApiService;
+        private readonly IOrderItemApiService _orderItemApiService;
 
         public ProductsController(
             IProductApiService productApiService,
@@ -61,7 +63,9 @@ namespace Nop.Plugin.Api.Controllers
             IManufacturerService manufacturerService,
             IProductTagService productTagService,
             IProductAttributeService productAttributeService,
-            IDTOHelper dtoHelper) : base(jsonFieldsSerializer, aclService, customerService, storeMappingService, storeService, discountService,
+            IDTOHelper dtoHelper,
+            IOrderApiService orderApiService,
+            IOrderItemApiService orderItemApiService) : base(jsonFieldsSerializer, aclService, customerService, storeMappingService, storeService, discountService,
                                          customerActivityService, localizationService, pictureService)
         {
             _productApiService = productApiService;
@@ -72,6 +76,8 @@ namespace Nop.Plugin.Api.Controllers
             _productService = productService;
             _productAttributeService = productAttributeService;
             _dtoHelper = dtoHelper;
+            _orderApiService = orderApiService;
+            _orderItemApiService = orderItemApiService;
         }
 
         /// <summary>
@@ -117,6 +123,379 @@ namespace Nop.Plugin.Api.Controllers
         }
 
         /// <summary>
+        ///     Receive a list of top selling products
+        /// </summary>
+        /// <response code="200">OK</response>
+        /// <response code="400">Bad Request</response>
+        /// <response code="401">Unauthorized</response>
+        [HttpGet]
+        [Route("/api/top-selling-products", Name = "GetTopSellingProducts")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ProductsRootObjectDto), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
+        [ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
+        [GetRequestsErrorInterceptorActionFilter]
+        public async Task<IActionResult> GetTopSellingProducts([FromQuery] ProductsTopSellingParametersModel parameters)
+        {
+            if (parameters.Limit < Constants.Configurations.MinLimit || parameters.Limit > Constants.Configurations.MaxLimit)
+            {
+                return Error(HttpStatusCode.BadRequest, "limit", "invalid limit parameter");
+            }
+
+            if (parameters.Page < Constants.Configurations.DefaultPageValue)
+            {
+                return Error(HttpStatusCode.BadRequest, "page", "invalid page parameter");
+            }
+
+            var orders = _orderApiService.GetOrders(parameters.Ids, parameters.CreatedAtMin,
+													parameters.CreatedAtMax,
+													1000000, 1, 0,
+													null,
+													null,
+													null,
+													null, null);
+            
+            Dictionary<int, int> productForOrderCount = new Dictionary<int, int>();
+            
+            foreach(var order in orders)
+            {
+                var allOrderItemsForOrder = await _orderItemApiService.GetOrderItemsForOrderAsync(order, 1000000, 1,
+                                                           0);
+                foreach(var orderItem in allOrderItemsForOrder)
+                {
+                //allOrderItemsForOrder.FirstOrDefault().ProductId
+                
+                    if(!productForOrderCount.ContainsKey(orderItem.ProductId))
+                    {
+                        productForOrderCount.Add(orderItem.ProductId, orderItem.Quantity);
+                    }
+                    else 
+                    {
+                        productForOrderCount[orderItem.ProductId] = productForOrderCount[orderItem.ProductId] + orderItem.Quantity;
+                    }
+                }
+            }
+
+            var allProducts = _productApiService.GetProducts(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax, parameters.UpdatedAtMin,
+                                                             parameters.UpdatedAtMax, parameters.Limit, parameters.Page, parameters.SinceId, parameters.CategoryId,
+                                                             parameters.VendorName, parameters.PublishedStatus, parameters.ManufacturerPartNumbers, parameters.IsDownload)
+                                                .WhereAwait(async p => await StoreMappingService.AuthorizeAsync(p));
+
+            var sortedproductForOrderCount = (from entry in productForOrderCount orderby entry.Value descending select entry).ToDictionary(x => x.Key, x => x.Value);
+
+            List<Product> topSellingProducts = new List<Product>();
+            foreach(var productCount in sortedproductForOrderCount)
+            {
+                var product = await allProducts.FirstOrDefaultAsync(p => p.Id == productCount.Key);
+                topSellingProducts.Add(product);
+                if(topSellingProducts.Count() > parameters.ProductToReturn)
+                {
+                    break;
+                }
+            }
+
+            IList<ProductTopSellingToReturnDto> productsAsDtos = await topSellingProducts.SelectAwait(async product => await _dtoHelper.PrepareProductsTopSellingToReturnDTOAsync(product, sortedproductForOrderCount)).OrderByDescending(p => p.ProductTotalOrderItemsCount).ToListAsync();
+
+            var productsRootObject = new ProductsTopSellingRootObjectDto
+            {
+                Products = productsAsDtos
+            };
+
+            var json = JsonFieldsSerializer.Serialize(productsRootObject, parameters.Fields ?? "");
+
+            return new RawJsonActionResult(json);
+        }
+
+        /// <summary>
+        ///     Receive a list of all products allow anonymous
+        /// </summary>
+        /// <response code="200">OK</response>
+        /// <response code="400">Bad Request</response>
+        /// <response code="401">Unauthorized</response>
+        [HttpGet]
+        [Route("/api/home-page-slider-products", Name = "GetHomePageSliderProducts")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ProductsRootObjectDto), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
+        [ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
+        [GetRequestsErrorInterceptorActionFilter]
+        public async Task<IActionResult> GetHomePageSliderProducts([FromQuery] ProductsParametersModel parameters)
+        {
+            if (parameters.Limit < Constants.Configurations.MinLimit || parameters.Limit > Constants.Configurations.MaxLimit)
+            {
+                return Error(HttpStatusCode.BadRequest, "limit", "invalid limit parameter");
+            }
+
+            if (parameters.Page < Constants.Configurations.DefaultPageValue)
+            {
+                return Error(HttpStatusCode.BadRequest, "page", "invalid page parameter");
+            }
+
+            var allProducts = _productApiService.GetProducts(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax, parameters.UpdatedAtMin,
+                                                             parameters.UpdatedAtMax, parameters.Limit, parameters.Page, parameters.SinceId, parameters.CategoryId,
+                                                             parameters.VendorName, parameters.PublishedStatus, parameters.ManufacturerPartNumbers, parameters.IsDownload)
+                                                .WhereAwait(async p => await StoreMappingService.AuthorizeAsync(p));
+
+            IList<ProductsForHomePageSliderToReturnDto> productsAsDtos = await allProducts.SelectAwait(async product => await _dtoHelper.PrepareProductForHomePageSliderToReturnDTOAsync(product)).ToListAsync();
+
+            var productsRootObject = new ProductsForHomePageSliderRootObjectDto
+            {
+                Products = productsAsDtos
+            };
+
+            var json = JsonFieldsSerializer.Serialize(productsRootObject, parameters.Fields ?? "");
+
+            return new RawJsonActionResult(json);
+        }
+
+        /// <summary>
+        ///     Receive a list of all products based on search tearm allow anonymous
+        /// </summary>
+        /// <response code="200">OK</response>
+        /// <response code="400">Bad Request</response>
+        /// <response code="401">Unauthorized</response>
+        [HttpGet]
+        [Route("/api/search-products", Name = "GetSearchProducts")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ProductsRootObjectDto), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
+        [ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
+        [GetRequestsErrorInterceptorActionFilter]
+        public async Task<IActionResult> GetSearchProducts([FromQuery] ProductsSearchParametersModel parameters)
+        {
+
+                if (parameters.Limit < Constants.Configurations.MinLimit || parameters.Limit > Constants.Configurations.MaxLimit)
+                {
+                    return Error(HttpStatusCode.BadRequest, "limit", "invalid limit parameter");
+                }
+
+                if (parameters.Page < Constants.Configurations.DefaultPageValue)
+                {
+                    return Error(HttpStatusCode.BadRequest, "page", "invalid page parameter");
+                }
+
+            var allProducts = _productApiService.GetProducts(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax, parameters.UpdatedAtMin,
+                                                             parameters.UpdatedAtMax, parameters.Limit, parameters.Page, parameters.SinceId, parameters.CategoryId,
+                                                             parameters.VendorName, parameters.PublishedStatus, parameters.ManufacturerPartNumbers, parameters.IsDownload)
+                                                .WhereAwait(async p => await StoreMappingService.AuthorizeAsync(p));
+
+
+            if (parameters.SearchTearm != null && parameters.SearchTearm != "")
+            {
+                char[] delimiterChars = { ' ', ',', '.', ':', '\t' };
+
+                var searchTearmArray = parameters.SearchTearm.ToLower().Split(delimiterChars);
+
+                var selectedProducts = new List<Product>();
+
+                List<Product> products = await allProducts.ToListAsync();
+
+                for (int i = 0; i < products.Count; i++)
+                {
+                    bool searchName = false;
+                    bool searchShortDescription = false;
+                    bool searchFullDescription = false;
+                    Product product = products[i];
+                    if (parameters.SearchName && !String.IsNullOrEmpty(product.Name))
+                    {
+                        searchName = SearchArrayInArray(searchTearmArray, product.Name.ToLower());
+                    }
+                    if(parameters.SearchShortDescription && !searchName && !String.IsNullOrEmpty(product.ShortDescription))
+                    {
+                        searchShortDescription = SearchArrayInArray(searchTearmArray, product.ShortDescription.ToLower());
+                    }
+                    if(parameters.SearchFullDescription && !searchShortDescription && !String.IsNullOrEmpty(product.FullDescription))
+                    {
+                        searchFullDescription = SearchArrayInArray(searchTearmArray, product.FullDescription.ToLower());
+                    }
+                    if(searchName || searchShortDescription || searchFullDescription)
+                    {
+                        selectedProducts.Add(product);
+                    }
+                }
+            allProducts = selectedProducts.ToAsyncEnumerable();
+            }
+
+            IList<ProductsForHomePageSliderToReturnDto> productsAsDtos = await allProducts.SelectAwait(async product => await _dtoHelper.PrepareProductForHomePageSliderToReturnDTOAsync(product)).ToListAsync();
+
+            var productsRootObject = new ProductsForHomePageSliderRootObjectDto
+            {
+                Products = productsAsDtos
+            };
+
+            var json = JsonFieldsSerializer.Serialize(productsRootObject, parameters.Fields ?? "");
+
+            return new RawJsonActionResult(json);
+        }
+
+        /// <summary>
+        ///     Receive a list of all products based on search tearm price and category allow anonymous
+        /// </summary>
+        /// <response code="200">OK</response>
+        /// <response code="400">Bad Request</response>
+        /// <response code="401">Unauthorized</response>
+        [HttpGet]
+        [Route("/api/search-tearm-price-category-products", Name = "GetSearchTearmPriceCategoryProducts")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ProductsRootObjectDto), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
+        [ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
+        [GetRequestsErrorInterceptorActionFilter]
+        public async Task<IActionResult> GetSearchTearmPriceCategoryProducts([FromQuery] ProductsSearchTearmPriceCategoryParametersModel parameters)
+        {
+
+                if (parameters.Limit < Constants.Configurations.MinLimit || parameters.Limit > Constants.Configurations.MaxLimit)
+                {
+                    return Error(HttpStatusCode.BadRequest, "limit", "invalid limit parameter");
+                }
+
+                if (parameters.Page < Constants.Configurations.DefaultPageValue)
+                {
+                    return Error(HttpStatusCode.BadRequest, "page", "invalid page parameter");
+                }
+
+
+
+            var allProducts = new List<Product>();
+            //search via category
+            if(parameters.CategoryIds != null)
+            {
+                foreach(var categoryId in parameters.CategoryIds)
+                {
+                    List<Product> AllProductsCategory = await _productApiService.GetProducts(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax, parameters.UpdatedAtMin,
+                                                                    parameters.UpdatedAtMax, parameters.Limit, parameters.Page, parameters.SinceId, categoryId,
+                                                                    parameters.VendorName, parameters.PublishedStatus, parameters.ManufacturerPartNumbers, parameters.IsDownload)
+                                                        .WhereAwait(async p => await StoreMappingService.AuthorizeAsync(p)).ToListAsync();
+                    allProducts = await allProducts.Union(AllProductsCategory).Distinct().ToListAsync();
+                }
+            }
+            else if(parameters.CategoryIds == null)
+            {
+                allProducts = await _productApiService.GetProducts(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax, parameters.UpdatedAtMin,
+                                                                   parameters.UpdatedAtMax, parameters.Limit, parameters.Page, parameters.SinceId, /* category id */ null,
+                                                                   parameters.VendorName, parameters.PublishedStatus, parameters.ManufacturerPartNumbers, parameters.IsDownload)
+                                                       .WhereAwait(async p => await StoreMappingService.AuthorizeAsync(p)).ToListAsync();
+            }
+
+            if (parameters.PriceFrom == 0 && parameters.PriceTo == 0)
+            {
+                parameters.PriceFrom = 0;
+                parameters.PriceTo = 10000000;
+            }
+            try
+            {
+                //search via price from and to
+                if (parameters.PriceFrom != null || parameters.PriceTo != null)
+                {
+                    foreach (var product in allProducts.ToList())
+                    {
+                        if (product.Price != null)
+                        {
+                            if (parameters.PriceFrom != null)
+                            {
+                                if (product.Price <= parameters.PriceFrom)
+                                {
+                                    allProducts.Remove(product);
+                                }
+                            }
+                            if (parameters.PriceTo != null)
+                            {
+                                if (product.Price >= parameters.PriceTo)
+                                {
+                                    allProducts.Remove(product);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch(Exception exc)
+            {
+                return BadRequest(exc.Message);
+            }
+
+            //search via string in name and short description and full description
+            if (parameters.SearchTearm != null && parameters.SearchTearm != "")
+            {
+                char[] delimiterChars = { ' ', ',', '.', ':', '\t' };
+
+                var searchTearmArray = parameters.SearchTearm.ToLower().Split(delimiterChars);
+
+                var selectedProducts = new List<Product>();
+
+                List<Product> products = await allProducts.ToListAsync();
+
+                for (int i = 0; i < products.Count; i++)
+                {
+                    bool searchName = false;
+                    bool searchShortDescription = false;
+                    bool searchFullDescription = false;
+                    Product product = products[i];
+                    if (parameters.SearchName && !String.IsNullOrEmpty(product.Name))
+                    {
+                        searchName = SearchArrayInArray(searchTearmArray, product.Name.ToLower());
+                    }
+                    if(parameters.SearchShortDescription && !searchName && !String.IsNullOrEmpty(product.ShortDescription))
+                    {
+                        searchShortDescription = SearchArrayInArray(searchTearmArray, product.ShortDescription.ToLower());
+                    }
+                    if(parameters.SearchFullDescription && !searchShortDescription && !String.IsNullOrEmpty(product.FullDescription))
+                    {
+                        searchFullDescription = SearchArrayInArray(searchTearmArray, product.FullDescription.ToLower());
+                    }
+                    if(searchName || searchShortDescription || searchFullDescription)
+                    {
+                        selectedProducts.Add(product);
+                    }
+                }
+            allProducts = await selectedProducts.ToListAsync();
+            }
+
+            IList<ProductsSearchTearmPriceCategoryToReturnDto> productsAsDtos = await allProducts.SelectAwait(async product => await _dtoHelper.PrepareProductForSearchTearmPriceCategoryToReturnDTOAsync(product)).ToListAsync();
+
+            var productsRootObject = new ProductsSearchTearmPriceCategoryRootObjectDto
+            {
+                Products = productsAsDtos
+            };
+
+            var json = JsonFieldsSerializer.Serialize(productsRootObject, parameters.Fields ?? "");
+
+            return new RawJsonActionResult(json);
+        }
+
+        /// <summary>
+        ///     Receive a list of all products prices allow anonymous
+        /// </summary>
+        /// <response code="200">OK</response>
+        /// <response code="400">Bad Request</response>
+        /// <response code="401">Unauthorized</response>
+        [HttpGet]
+        [Route("/api/price-products", Name = "GetPriceProducts")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ProductsRootObjectDto), (int)HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
+        [ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
+        [GetRequestsErrorInterceptorActionFilter]
+        public async Task<IActionResult> GetPriceProducts([FromQuery] ProductsParametersModel parameters)
+        {
+            var allProducts = _productApiService.GetProducts(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax, parameters.UpdatedAtMin,
+                                                             parameters.UpdatedAtMax, parameters.Limit, parameters.Page, parameters.SinceId, parameters.CategoryId,
+                                                             parameters.VendorName, parameters.PublishedStatus, parameters.ManufacturerPartNumbers, parameters.IsDownload)
+                                                .WhereAwait(async p => await StoreMappingService.AuthorizeAsync(p));
+
+            IList<ProductsPriceToReturnDto> productsAsDtos = await allProducts.Select(product => _dtoHelper.PrepareProductPriceToReturnDTOAsync(product)).ToListAsync();
+
+            var productsRootObject = new ProductsPriceRootObjectDto
+            {
+                Products = productsAsDtos
+            };
+
+            var json = JsonFieldsSerializer.Serialize(productsRootObject, parameters.Fields ?? "");
+
+            return new RawJsonActionResult(json);
+        }
+
+        /// <summary>
         ///     Receive a count of all products
         /// </summary>
         /// <response code="200">OK</response>
@@ -143,7 +522,7 @@ namespace Nop.Plugin.Api.Controllers
         }
 
         /// <summary>
-        ///     Retrieve product by spcified id
+        ///     Retrieve product by spcified id allow anonymous
         /// </summary>
         /// <param name="id">Id of the product</param>
         /// <param name="fields">Fields from the product you want your json to contain</param>
@@ -152,7 +531,7 @@ namespace Nop.Plugin.Api.Controllers
         /// <response code="401">Unauthorized</response>
         [HttpGet]
         [Route("/api/products/{id}", Name = "GetProductById")]
-        [AuthorizePermission("PublicStoreAllowNavigation")]
+        [AllowAnonymous]
         [ProducesResponseType(typeof(ProductsRootObjectDto), (int)HttpStatusCode.OK)]
         [ProducesResponseType(typeof(string), (int)HttpStatusCode.Unauthorized)]
         [ProducesResponseType(typeof(ErrorsRootObject), (int)HttpStatusCode.BadRequest)]
@@ -615,6 +994,17 @@ namespace Nop.Plugin.Api.Controllers
                 product.RequiredProductIds = null;
             else
                 product.RequiredProductIds = string.Join(',', requiredProductIds.Select(id => id.ToString()));
+        }
+
+        private bool SearchArrayInArray(string[] searchTearms, string value)
+        {
+            char[] delimiterChars = { ' ', ',', '.', ':', '\t' };
+
+            var valueArray = value.ToLower().Split(delimiterChars);
+
+            bool contain = searchTearms.Any(s => Array.IndexOf(valueArray, s) >= 0);
+
+            return contain;
         }
 
         #endregion

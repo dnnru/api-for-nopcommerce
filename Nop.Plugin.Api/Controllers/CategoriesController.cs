@@ -30,6 +30,8 @@ using Nop.Services.Media;
 using Nop.Services.Security;
 using Nop.Services.Seo;
 using Nop.Services.Stores;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace Nop.Plugin.Api.Controllers
 {
@@ -73,7 +75,6 @@ namespace Nop.Plugin.Api.Controllers
         /// <response code="401">Unauthorized</response>
         [HttpGet]
         [Route("/api/categories", Name = "GetCategories")]
-        [AuthorizePermission("PublicStoreAllowNavigation")]
         [ProducesResponseType(typeof(CategoriesRootObject), (int) HttpStatusCode.OK)]
         [ProducesResponseType(typeof(ErrorsRootObject), (int) HttpStatusCode.BadRequest)]
         [GetRequestsErrorInterceptorActionFilter]
@@ -103,6 +104,48 @@ namespace Nop.Plugin.Api.Controllers
                                        };
 
             var json = JsonFieldsSerializer.Serialize(categoriesRootObject, parameters.Fields);
+
+            return new RawJsonActionResult(json);
+        }
+
+        /// <summary>
+        ///     Receive a list of all Categories allow anonymous
+        /// </summary>
+        /// <response code="200">OK</response>
+        /// <response code="400">Bad Request</response>
+        /// <response code="401">Unauthorized</response>
+        [HttpGet]
+        [Route("/api/allcategories", Name = "GetAllCategories")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(CategoriesRootObject), (int) HttpStatusCode.OK)]
+        [ProducesResponseType(typeof(ErrorsRootObject), (int) HttpStatusCode.BadRequest)]
+        [GetRequestsErrorInterceptorActionFilter]
+        public async Task<IActionResult> GetAllCategories([FromQuery] CategoriesParametersModel parameters)
+        {
+            if (parameters.Limit < Constants.Configurations.MinLimit || parameters.Limit > Constants.Configurations.MaxLimit)
+            {
+                return Error(HttpStatusCode.BadRequest, "limit", "Invalid limit parameter");
+            }
+
+            if (parameters.Page < Constants.Configurations.DefaultPageValue)
+            {
+                return Error(HttpStatusCode.BadRequest, "page", "Invalid page parameter");
+            }
+
+            var allCategories = _categoryApiService.GetCategories(parameters.Ids, parameters.CreatedAtMin, parameters.CreatedAtMax,
+                                                                  parameters.UpdatedAtMin, parameters.UpdatedAtMax,
+                                                                  parameters.Limit, parameters.Page, parameters.SinceId,
+                                                                  parameters.ProductId, parameters.PublishedStatus, parameters.ParentCategoryId)
+                                                   .WhereAwait(async c => await StoreMappingService.AuthorizeAsync(c));
+
+            IList<CategoryAllDto> categoriesAsDtos = await allCategories.SelectAwait(async category => await _dtoHelper.PrepareAllCategoryDTOAsync(category)).ToListAsync();
+
+            var categoriesAllRootObject = new CategoriesAllRootObject
+                                       {
+                                           Categories = categoriesAsDtos
+                                       };
+
+            var json = JsonFieldsSerializer.Serialize(categoriesAllRootObject, parameters.Fields);
 
             return new RawJsonActionResult(json);
         }

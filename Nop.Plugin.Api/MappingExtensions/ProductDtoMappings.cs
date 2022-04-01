@@ -15,5 +15,25 @@ namespace Nop.Plugin.Api.MappingExtensions
         {
             return productAttributeValue.MapTo<ProductAttributeValue, ProductAttributeValueDto>();
         }
+
+        public static ProductsForHomePageSliderToReturnDto ToDto(this ProductDto productDto)
+        {
+            return productDto.MapTo<ProductDto, ProductsForHomePageSliderToReturnDto>();
+        }
+
+        public static ProductsPriceToReturnDto ToDtoPrice(this Product product)
+        {
+            return product.MapTo<Product, ProductsPriceToReturnDto>();
+        }
+
+        public static ProductTopSellingToReturnDto ToDtoTopSelling(this ProductDto product)
+        {
+            return product.MapTo<ProductDto, ProductTopSellingToReturnDto>();
+        }
+
+        public static ProductsSearchTearmPriceCategoryToReturnDto ToDtoSearch(this ProductDto product)
+        {
+            return product.MapTo<ProductDto, ProductsSearchTearmPriceCategoryToReturnDto>();
+        }
     }
 }
