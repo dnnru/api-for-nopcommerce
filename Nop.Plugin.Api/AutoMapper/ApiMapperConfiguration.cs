@@ -94,7 +94,6 @@ namespace Nop.Plugin.Api.AutoMapper
             CreateMap<Country, CountryDto>();
 
             CreateMap<Currency, CurrencyDto>();
-<<<<<<< HEAD
 
             CreateMap<ProductDto, ProductsForHomePageSliderToReturnDto>();
 
@@ -102,10 +101,9 @@ namespace Nop.Plugin.Api.AutoMapper
             
             CreateMap<ProductDto, ProductTopSellingToReturnDto>();
             CreateMap<ProductDto, ProductsSearchTearmPriceCategoryToReturnDto>();
-=======
-            CreateVendorToDTOMap();
+			
+			CreateVendorToDTOMap();
             CreateVendorNoteToDTOMap();
->>>>>>> mirtaqi/main
         }
 
         public int Order => 0;
