@@ -22,6 +22,8 @@ using Nop.Services.Topics;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
+using Nop.Core.Domain.Vendors;
+using Nop.Services.Vendors;
 
 namespace Nop.Plugin.Api.Infrastructure
 {
@@ -76,6 +78,7 @@ namespace Nop.Plugin.Api.Infrastructure
             services.AddScoped<IFactory<ShoppingCartItem>, ShoppingCartItemFactory>();
             services.AddScoped<IFactory<Manufacturer>, ManufacturerFactory>();
             services.AddScoped<IFactory<Topic>, TopicFactory>();
+            services.AddScoped<IFactory<Vendor>, VendorFactory>();
 
             services.AddScoped<IJsonPropertyMapper, JsonPropertyMapper>();
 
@@ -93,6 +96,8 @@ namespace Nop.Plugin.Api.Infrastructure
             services.Replace(ServiceDescriptor.Scoped<Nop.Core.IStoreContext, WebApiStoreContext>());
             services.AddScoped(typeof(ParametersModelBinder<>));
             services.AddScoped(typeof(JsonModelBinder<>));
+
+            services.AddScoped<IVendorService, VendorService>();
         }
     }
 }

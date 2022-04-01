@@ -11,6 +11,7 @@ using Nop.Core.Domain.Messages;
 using Nop.Core.Domain.Orders;
 using Nop.Core.Domain.Stores;
 using Nop.Core.Domain.Topics;
+using Nop.Core.Domain.Vendors;
 using Nop.Core.Infrastructure.Mapper;
 using Nop.Plugin.Api.Areas.Admin.Models;
 using Nop.Plugin.Api.Domain;
@@ -31,6 +32,7 @@ using Nop.Plugin.Api.DTO.ShoppingCarts;
 using Nop.Plugin.Api.DTO.SpecificationAttributes;
 using Nop.Plugin.Api.DTO.Stores;
 using Nop.Plugin.Api.DTOs.Topics;
+using Nop.Plugin.Api.DTOs.Vendors;
 using Nop.Plugin.Api.MappingExtensions;
 
 namespace Nop.Plugin.Api.AutoMapper
@@ -92,6 +94,7 @@ namespace Nop.Plugin.Api.AutoMapper
             CreateMap<Country, CountryDto>();
 
             CreateMap<Currency, CurrencyDto>();
+<<<<<<< HEAD
 
             CreateMap<ProductDto, ProductsForHomePageSliderToReturnDto>();
 
@@ -99,6 +102,10 @@ namespace Nop.Plugin.Api.AutoMapper
             
             CreateMap<ProductDto, ProductTopSellingToReturnDto>();
             CreateMap<ProductDto, ProductsSearchTearmPriceCategoryToReturnDto>();
+=======
+            CreateVendorToDTOMap();
+            CreateVendorNoteToDTOMap();
+>>>>>>> mirtaqi/main
         }
 
         public int Order => 0;
@@ -219,6 +226,20 @@ namespace Nop.Plugin.Api.AutoMapper
                                       //.ForMember(x => x.FullDescription, y => y.MapFrom(src => WebUtility.HtmlEncode(src.FullDescription)))
                                       //.ForMember(x => x.Tags,
                                       //           y => y.MapFrom(src => src.ProductProductTagMappings.Select(x => x.ProductTag.Name)));
+        }
+        private void CreateVendorToDTOMap()
+        {
+            AutoMapperApiConfiguration.MapperConfigurationExpression.CreateMap<Vendor, VendorDto>()
+                .IgnoreAllNonExisting()
+                .ForMember(x => x.Id, y => y.MapFrom(src => src.Id));
+         
+        }
+        private void CreateVendorNoteToDTOMap()
+        {
+            AutoMapperApiConfiguration.MapperConfigurationExpression.CreateMap<VendorNote, VendorNoteDto>()
+                .IgnoreAllNonExisting()
+                .ForMember(x => x.Id, y => y.MapFrom(src => src.Id));
+
         }
     }
 }

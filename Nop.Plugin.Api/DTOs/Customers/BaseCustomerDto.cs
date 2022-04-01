@@ -138,5 +138,10 @@ namespace Nop.Plugin.Api.DTO.Customers
             }
             set => _roleIds = value;
         }
+        /// <summary>
+        ///     Gets or sets the vendor id
+        /// </summary>
+        [JsonProperty("vendor_id")]
+        public int VendorId { get; set; }
     }
 }
